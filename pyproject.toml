@@ -1,0 +1,19 @@
+[project]
+name = "cameracquire"
+version = "0.1.0"
+description = "Camera acquisition code, to use with Teledyne FLIR Chameleon3 CM3-U3-13Y3C-CS cameras."
+authors = [{ name = "Timothe Jost", email = "timothe.jost@wanadoo.fr" }]
+dependencies = ["harvesters>=1.4.3", "rich>=13.8.1"]
+requires-python = ">=3.9, <3.12"
+readme = "README.md"
+license = { text = "MIT" }
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.scripts]
+cameracquire = { call = "cameracquire.api:command_dispatcher" }
