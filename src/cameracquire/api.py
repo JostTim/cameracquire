@@ -1,4 +1,5 @@
 from .core import CameraDriver
+from .render_backends.terminal import NodeRenderer
 import argparse
 
 
@@ -14,7 +15,9 @@ def list_cameras(args):
 
 def list_nodes(args):
     with CameraDriver() as driver:
-        driver.show_available_nodes(args.id)
+        device = driver.select_camera(args.id)
+        with driver.create(device) as acquirer:
+            NodeRenderer(exclude_unaccessible_nodes=True).print_camera_nodes(acquirer)
 
 
 def command_dispatcher():
