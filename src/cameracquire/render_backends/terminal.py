@@ -233,13 +233,10 @@ class PayloadComponentEmptyRenderer(SingleMessageRenderer):
     style = "bright_red"
 
 
-class
+class ImageRecievedNotificationRenderer(Renderer):
 
-
-def render()
-
-
-f"Recieved an image of size : {image.shape}."
+    def render(self, image_shape):
+        self.console.print(f"Recieved an image of size : {image_shape}.")
 
 
 class NodeRenderer(Renderer):

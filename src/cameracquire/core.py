@@ -1,11 +1,11 @@
 from pathlib import Path
 import numpy as np
 
-from harvesters.core import Harvester, DeviceInfo, ImageAcquirer, Buffer, Component, Component2DImage, ParameterSet
+from harvesters.core import Harvester, DeviceInfo, ImageAcquirer, Buffer, Component2DImage, ParameterSet
 
 from genicam.gentl import AccessDeniedException
 
-from typing import Sequence, List, Dict, Any, Callable, Optional
+from typing import List, Dict, Optional
 import sys
 
 from .render_backends import get_backends
@@ -94,9 +94,9 @@ class CameraDriver(Harvester):
                     self.render_backends.render("PayloadEmptyRenderer")
                     continue
 
-                # type: ignore
-                # Component2DImage
-                image_data: Component = buffer.payload.components[0]
+                image_data: Component2DImage = (
+                    buffer.payload.components[0]  # type: ignore
+                )
                 if image_data.data is None:
                     self.render_backends.render(
                         "PayloadComponentEmptyRenderer")
@@ -104,7 +104,8 @@ class CameraDriver(Harvester):
 
                 image = np.reshape(
                     image_data.data, (image_data.height, image_data.width))
-                console.print()
+                self.render_backends.render(
+                    "PayloadComponentEmptyRenderer", image.shape)
 
     def show_available_nodes(self, camera_id_number: str, exclude_unaccessibles=True):
 

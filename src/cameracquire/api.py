@@ -1,5 +1,4 @@
 from .core import CameraDriver
-from .render_backends.terminal import NodeRenderer
 import argparse
 
 
@@ -21,6 +20,12 @@ def list_nodes(args):
 
 
 def command_dispatcher():
+
+    from .render_backends import terminal
+    from .render_backends import register_backend
+
+    register_backend("rich", terminal)
+
     parser = argparse.ArgumentParser(description="Camera acquisition commands")
     subparsers = parser.add_subparsers(dest="command")
 
