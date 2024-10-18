@@ -1,5 +1,6 @@
+from abc import ABC, abstractmethod
 from types import ModuleType
-from typing import Optional, Sequence, List, Set
+from typing import Optional, List, Set, Callable
 
 REGISTERED_BACKENDS = {}
 DEFAULT_BACKENDS = set()
@@ -27,14 +28,38 @@ def get_backend(backend_name: str):
     return REGISTERED_BACKENDS[backend_name]
 
 
-def get_backends(backend_names: Optional[Set[str] | str]):
+def get_default_backends() -> "BackendsCollection":
+    return get_backends(DEFAULT_BACKENDS)
+
+
+def get_backends(backend_names: Optional[Set[str] | List[str] | str] = None) -> "BackendsCollection":
     if backend_names is None:
         return get_default_backends()
-    if not isinstance(backend_names, (list, set, tuple)):
+    if not isinstance(backend_names, (list, set)):
         backend_names = [backend_names]
+    return BackendsCollection([get_backend(backend_name) for backend_name in backend_names])
 
-    return [get_backend(backend_name) for backend_name in backend_names]
+
+class BaseRenderer(ABC):
+    @abstractmethod
+    def render(self, *args, **kwargs) -> None: ...
 
 
-def get_default_backends():
-    return [get_backend(backend_name) for backend_name in DEFAULT_BACKENDS]
+class BackendsCollection:
+
+    backends = []
+
+    def __init__(self, backends: List[ModuleType]):
+        self.backends = backends
+
+    def render(self, classname: str, *args, **kwargs):
+        for backend in self.backends:
+            cls = self.get_class(backend, classname)
+            self.render_single(cls, *args, **kwargs)
+
+    def get_class(self, backend, classname: str) -> type[BaseRenderer]:
+        return getattr(backend, classname)
+
+    def render_single(self, cls: type[BaseRenderer], *args, **kwargs):
+        renderer = cls()
+        renderer.render(*args, **kwargs)

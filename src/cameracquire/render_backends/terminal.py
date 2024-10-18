@@ -5,7 +5,6 @@ from genicam.genapi import (
     IEnumeration,
     IString,
     IBoolean,
-    IDeviceInfo,
     IFloat,
     IValue,
     IRegister,
@@ -14,8 +13,9 @@ from genicam.genapi import (
     ERepresentation,
     EDisplayNotation,
     EAccessMode,
-    AccessException,
     IntEnum,
+    # IDeviceInfo,
+    # AccessException,
 )
 from harvesters.core import ImageAcquirer, NodeMap, DeviceInfo
 
@@ -28,13 +28,15 @@ from rich.traceback import install as install_rich_tracebacks
 from pathlib import Path
 from typing import Sequence, List, Dict, Any, Callable, Optional, TYPE_CHECKING
 
+from . import BaseRenderer
+
 if TYPE_CHECKING:
     from ..core import CameraDriver
 
 install_rich_tracebacks(show_locals=True)
 
 
-class Renderer:
+class Renderer(BaseRenderer):
 
     def __init__(self, **kwargs):
         """Initializes the object with the provided key-value pairs.
@@ -56,14 +58,28 @@ class DriverCTIRenderer(Renderer):
     low_level_info_style = "grey23"
     error_style = "bright_red"
 
-    def render_failure_message(self):
-        return Text(
-            "Didn't found an installation of ImpactAcquire. Please download and install one. "
-            "You can find it at this link : http://static.matrix-vision.com/mvIMPACT_Acquire/ "
-            "Prefer using the lastest version. Once you clicked on it, select an executeable for your "
-            "operating system (most likely ImpactAcquire-x86_64-X.X.X.exe "
-            "if you are on a 64bit Windows computer).",
-            style=self.error_style,
+    def render(self, driver: CameraDriver):
+        if not len(driver._cti_files):
+            render = self.render_failure_message(driver)
+        else:
+            render = self.render_cti_files(driver._cti_files)
+        self.console.print(render)
+
+    def render_failure_message(self, driver: CameraDriver):
+        return Text.assemble(
+            (
+                "Didn't found an installation of ImpactAcquire. Please download and install one. "
+                "You can find it at this link : http://static.matrix-vision.com/mvIMPACT_Acquire/ "
+                "Prefer using the lastest version. Once you clicked on it, select an executeable for your "
+                "operating system (most likely ImpactAcquire-x86_64-X.X.X.exe "
+                "if you are on a 64bit Windows computer).",
+                self.error_style
+            ),
+            (
+                "This package will then try to look for .cti files at "
+                f"either of these locations : {', '.join([str(file) for file in driver.cti_search_locations])}. "
+                " Please make sure it exists into one of these locations if the error persists.",
+                self.low_level_info_style)
         )
 
     def render_success_message(self):
@@ -78,29 +94,60 @@ class DriverCTIRenderer(Renderer):
     def render_cti_files(self, cti_files: List[str | Path]):
 
         infos = []
-        if not len(cti_files):
-            return self.render_failure_message()
         infos.append(self.render_success_message())
         for cti_file in cti_files:
             infos.append(self.render_cti_file(cti_file))
         return Group(*infos)
 
-    def print_files(self, driver: CameraDriver):
-        self.console.print(self.render_cti_files(driver._cti_files))
+
+class DeviceSelectionRenderer(Renderer):
+
+    def render(self, cameras: Dict[str, DeviceInfo], selected_camera: DeviceInfo | None, selection_id: str | int):
+        if selected_camera is None:
+            render = self.render_not_found_message(cameras, selection_id)
+        else:
+            render = self.render_selected(selected_camera)
+        self.console.print(render)
+
+    def render_selected(self, selected_camera: DeviceInfo):
+        return Text(f"Selected camera {selected_camera.property_dict['id_']}")
+
+    def render_not_found_message(self, cameras: Dict[str, DeviceInfo], selection_id: str | int):
+        other_possibilities = (
+            f"Other cameras with ID: {', '.join(cameras.keys())} are available"
+            if len(cameras)
+            else "No camera appear to be accessible"
+        )
+
+        Text.assemble(
+            (
+                f"Unable to access the camera with ID: {selection_id}.\n{other_possibilities}.\n",
+                "bright_red",
+            ),
+            ("Check :\n", "deep_pink3"),
+            ("  - that your camera is powered up (fisrt)\n", "yellow1"),
+            ("  - your connections (second)\n", "yellow1"),
+            ("  - if other istances accessing the camera are still running (third)\n", "yellow1"),
+            ("  - and eventually your driver installation (last)", "yellow1"),
+            (
+                " Look at the output of get_genicam_driver_location for driver related issues informations",
+                "grey23",
+            ),
+        )
 
 
 class DeviceInfoRenderer(Renderer):
 
     property_style = "dark_slate_gray2"
 
+    def render(self, cameras: Dict[str, DeviceInfo]):
+        self.console.print(self.render_devices_infos(cameras))
+
     def get_no_device_message(self):
         return Text(
             "No device or camera is available. Check that you properly connected " "them and that they are powered on",
             style="bright_red",
         )
-
-    def print_infos(self, cameras: Dict[str, DeviceInfo]):
-        self.console.print(self.render_devices_infos(cameras))
 
     def render_devices_infos(self, cameras: Dict[str, DeviceInfo]):
         if not len(cameras):
@@ -138,6 +185,63 @@ class DeviceInfoRenderer(Renderer):
         )
 
 
+class DeviceDeniedAccessRenderer(Renderer):
+
+    def render(self, exception: Exception, search_key: DeviceInfo | Dict[str, str] | str):
+
+        if isinstance(search_key, DeviceInfo):
+            device_name = search_key.property_dict["display_name"]
+        elif isinstance(search_key, dict):
+            device_name = search_key["display_name"]
+        else:
+            device_name = search_key
+
+        render = Text.assemble(
+            (f"{type(exception).__name__}:", "bold bright_red"),
+            f" {exception}\n",
+            ("Cannot get control access", "bright_red"),
+            " on device ",
+            (f'"{device_name}"', "bold blue"),
+            ". Maybe it is already opened by another service ? Ensure to close all systems using it, "
+            "and retry.",
+        )
+
+        self.console.print(render)
+
+
+class SingleMessageRenderer(Renderer):
+
+    message = ""
+    style = None
+
+    def render(self):
+        self.console.print(self.message, style=self.style)
+
+
+class NoDataRenderer(SingleMessageRenderer):
+    message = "No data to acquire. Timeout"
+    style = "bright_red"
+
+
+class PayloadEmptyRenderer(SingleMessageRenderer):
+    message = "The payload of the buffer acquired was empty."
+    style = "bright_red"
+
+
+class PayloadComponentEmptyRenderer(SingleMessageRenderer):
+    message = "No image data was found in the buffer's payload first component"
+    style = "bright_red"
+
+
+class
+
+
+def render()
+
+
+f"Recieved an image of size : {image.shape}."
+
+
 class NodeRenderer(Renderer):
     """render python rich console text for genicam api nodes hierarchies.
     Colors and styles can be tuned with class attributes passed to init as regular kwargs arguments
@@ -157,10 +261,41 @@ class NodeRenderer(Renderer):
 
     exclude_unaccessible_nodes = True
 
-    def print_camera_nodes(self, acquirer: ImageAcquirer):
+    def render(self, item: IValue | NodeMap | ImageAcquirer, title: Optional[str] = None) -> Panel | None:
 
-        self.console.print(self.render(acquirer.device.node_map))
-        self.console.print(self.render(acquirer.remote_device.node_map))
+        if isinstance(item, ImageAcquirer):
+            render = Group(*[self.render_nodemap(device.node_map)
+                             for device in (item.device, item.remote_device)])
+        elif isinstance(item, NodeMap):
+            render = self.render_nodemap(item, title)
+        elif isinstance(item, IValue):
+            render = self.render_node(item)
+        else:
+            raise NotImplementedError(f"Unsupported type: {type(item)}")
+        self.console.print(render)
+
+    def render_nodemap(self, nodemap: NodeMap, title: Optional[str] = None) -> Panel:
+        model_name = nodemap.device_info.model_name
+        if title is None:
+            title = f"Nodes informations for the device: {model_name}"
+        renders = self.render_node(nodemap.nodes[0])
+        if renders is None:
+            raise ValueError(
+                f"Unable to show any node from the nodemap for {title}")
+        panel = Panel.fit(
+            renders,
+            title=title,
+            border_style=self.root_panel_style,
+        )
+        return panel
+
+    def render_node(self, node: IValue) -> Panel | None:
+        try:
+            renderer = self.get_node_renderer(node)
+            panel = renderer(node)
+        except Exception as e:
+            panel = self.render_error_node(node, e)
+        return panel
 
     def get_base_fields(self, item, include_value=True) -> Dict[str, Any]:
         """Return the base fields of an item.
@@ -206,7 +341,6 @@ class NodeRenderer(Renderer):
         )
 
     def get_notation_precision_fields(self, item: IFloat) -> Dict[str, str]:
-        notation = EDisplayNotation(item.display_notation)
         return {
             "Display Precision": item.display_precision,
             "Display Notation": self.get_enum_text(EDisplayNotation(item.display_notation)),
@@ -251,7 +385,8 @@ class NodeRenderer(Renderer):
     def render_inaccessible_node(self, item: IValue) -> Panel:
         fields = self.get_base_fields(item, include_value=False)
         fields.update(self.get_ivalue_class(item))
-        fields["Access"] = self.get_enum_text(EAccessMode(item.get_access_mode()))
+        fields["Access"] = self.get_enum_text(
+            EAccessMode(item.get_access_mode()))
         fields.update(
             self.get_exception_error(
                 exception="AccessException",
@@ -268,7 +403,7 @@ class NodeRenderer(Renderer):
 
     def render_category(self, item: ICategory) -> Panel | None:
 
-        elements = [self.render(element) for element in item.features]
+        elements = [self.render_node(element) for element in item.features]
 
         # We skip the category Panel if it's empty, due to unshown nodes
         # (tuneable with exclude_unaccessible_nodes attribute)
@@ -291,9 +426,11 @@ class NodeRenderer(Renderer):
 
     def render_enumeration(self, item: IEnumeration) -> Panel:
         fields = self.get_base_fields(item)
-        fields["Current Value"] = self.render_enum_entry(item.get_current_entry(), padding=0, prefix="")
+        fields["Current Value"] = self.render_enum_entry(
+            item.get_current_entry(), padding=0, prefix="")
         fields["Possible Values"] = ""
-        additional_lines = [self.render_enum_entry(subitem) for subitem in item.entries]
+        additional_lines = [self.render_enum_entry(
+            subitem) for subitem in item.entries]
         return self.render_fields(fields, item, additional_lines)
 
     def render_float(self, item: IFloat) -> Panel:
@@ -339,7 +476,8 @@ class NodeRenderer(Renderer):
             Padding: The rendered enum entry with the specified styling.
         """
         return Padding(
-            Text.assemble((f"{prefix}{item.node.display_name}: ", self.enum_entry_style), f"{item.value}"),
+            Text.assemble((f"{prefix}{item.node.display_name}: ",
+                          self.enum_entry_style), f"{item.value}"),
             (0, 0, 0, padding),
         )
 
@@ -413,7 +551,8 @@ class NodeRenderer(Renderer):
         """
 
         # if usit property is None, False or empty, we don't render it.
-        lines: List[Text | Padding] = [self.render_property(key, value) for key, value in fields.items()]
+        lines: List[Text | Padding] = [self.render_property(
+            key, value) for key, value in fields.items()]
         lines += additional_lines
 
         return Panel.fit(
@@ -423,28 +562,3 @@ class NodeRenderer(Renderer):
             border_style=self.node_panel_style if item_style is None else item_style,
             width=150,
         )
-
-    def render(self, node: IValue | NodeMap, title: Optional[str] = None) -> Panel | None:
-
-        if isinstance(node, NodeMap):
-            nodemap = node
-            model_name = nodemap.device_info.model_name
-            if title is None:
-                title = f"Nodes informations for the device: {model_name}"
-            renders = self.render(nodemap.nodes[0])
-            if renders is None:
-                raise ValueError(f"Unable to show any node from the nodemap for {title}")
-            panel = Panel.fit(
-                renders,
-                title=title,
-                border_style=self.root_panel_style,
-            )
-
-        else:
-            try:
-                renderer = self.get_node_renderer(node)
-                panel = renderer(node)
-            except Exception as e:
-                panel = self.render_error_node(node, e)
-
-        return panel
