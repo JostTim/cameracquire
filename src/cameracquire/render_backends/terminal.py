@@ -58,14 +58,14 @@ class DriverCTIRenderer(Renderer):
     low_level_info_style = "grey23"
     error_style = "bright_red"
 
-    def render(self, driver: CameraDriver):
+    def render(self, driver: "CameraDriver"):
         if not len(driver._cti_files):
             render = self.render_failure_message(driver)
         else:
             render = self.render_cti_files(driver._cti_files)
         self.console.print(render)
 
-    def render_failure_message(self, driver: CameraDriver):
+    def render_failure_message(self, driver: "CameraDriver"):
         return Text.assemble(
             (
                 "Didn't found an installation of ImpactAcquire. Please download and install one. "
@@ -73,13 +73,14 @@ class DriverCTIRenderer(Renderer):
                 "Prefer using the lastest version. Once you clicked on it, select an executeable for your "
                 "operating system (most likely ImpactAcquire-x86_64-X.X.X.exe "
                 "if you are on a 64bit Windows computer).",
-                self.error_style
+                self.error_style,
             ),
             (
                 "This package will then try to look for .cti files at "
                 f"either of these locations : {', '.join([str(file) for file in driver.cti_search_locations])}. "
                 " Please make sure it exists into one of these locations if the error persists.",
-                self.low_level_info_style)
+                self.low_level_info_style,
+            ),
         )
 
     def render_success_message(self):
@@ -202,8 +203,7 @@ class DeviceDeniedAccessRenderer(Renderer):
             ("Cannot get control access", "bright_red"),
             " on device ",
             (f'"{device_name}"', "bold blue"),
-            ". Maybe it is already opened by another service ? Ensure to close all systems using it, "
-            "and retry.",
+            ". Maybe it is already opened by another service ? Ensure to close all systems using it, " "and retry.",
         )
 
         self.console.print(render)
@@ -261,8 +261,7 @@ class NodeRenderer(Renderer):
     def render(self, item: IValue | NodeMap | ImageAcquirer, title: Optional[str] = None) -> Panel | None:
 
         if isinstance(item, ImageAcquirer):
-            render = Group(*[self.render_nodemap(device.node_map)
-                             for device in (item.device, item.remote_device)])
+            render = Group(*[self.render_nodemap(device.node_map) for device in (item.device, item.remote_device)])
         elif isinstance(item, NodeMap):
             render = self.render_nodemap(item, title)
         elif isinstance(item, IValue):
@@ -277,8 +276,7 @@ class NodeRenderer(Renderer):
             title = f"Nodes informations for the device: {model_name}"
         renders = self.render_node(nodemap.nodes[0])
         if renders is None:
-            raise ValueError(
-                f"Unable to show any node from the nodemap for {title}")
+            raise ValueError(f"Unable to show any node from the nodemap for {title}")
         panel = Panel.fit(
             renders,
             title=title,
@@ -382,8 +380,7 @@ class NodeRenderer(Renderer):
     def render_inaccessible_node(self, item: IValue) -> Panel:
         fields = self.get_base_fields(item, include_value=False)
         fields.update(self.get_ivalue_class(item))
-        fields["Access"] = self.get_enum_text(
-            EAccessMode(item.get_access_mode()))
+        fields["Access"] = self.get_enum_text(EAccessMode(item.get_access_mode()))
         fields.update(
             self.get_exception_error(
                 exception="AccessException",
@@ -423,11 +420,9 @@ class NodeRenderer(Renderer):
 
     def render_enumeration(self, item: IEnumeration) -> Panel:
         fields = self.get_base_fields(item)
-        fields["Current Value"] = self.render_enum_entry(
-            item.get_current_entry(), padding=0, prefix="")
+        fields["Current Value"] = self.render_enum_entry(item.get_current_entry(), padding=0, prefix="")
         fields["Possible Values"] = ""
-        additional_lines = [self.render_enum_entry(
-            subitem) for subitem in item.entries]
+        additional_lines = [self.render_enum_entry(subitem) for subitem in item.entries]
         return self.render_fields(fields, item, additional_lines)
 
     def render_float(self, item: IFloat) -> Panel:
@@ -473,8 +468,7 @@ class NodeRenderer(Renderer):
             Padding: The rendered enum entry with the specified styling.
         """
         return Padding(
-            Text.assemble((f"{prefix}{item.node.display_name}: ",
-                          self.enum_entry_style), f"{item.value}"),
+            Text.assemble((f"{prefix}{item.node.display_name}: ", self.enum_entry_style), f"{item.value}"),
             (0, 0, 0, padding),
         )
 
@@ -548,8 +542,7 @@ class NodeRenderer(Renderer):
         """
 
         # if usit property is None, False or empty, we don't render it.
-        lines: List[Text | Padding] = [self.render_property(
-            key, value) for key, value in fields.items()]
+        lines: List[Text | Padding] = [self.render_property(key, value) for key, value in fields.items()]
         lines += additional_lines
 
         return Panel.fit(

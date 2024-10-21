@@ -48,6 +48,7 @@ class BaseRenderer(ABC):
 class BackendsCollection:
 
     backends = []
+    DEBUG = False
 
     def __init__(self, backends: List[ModuleType]):
         self.backends = backends
@@ -55,10 +56,15 @@ class BackendsCollection:
     def render(self, classname: str, *args, **kwargs):
         for backend in self.backends:
             cls = self.get_class(backend, classname)
+            if cls is None:
+                continue
             self.render_single(cls, *args, **kwargs)
 
-    def get_class(self, backend, classname: str) -> type[BaseRenderer]:
-        return getattr(backend, classname)
+    def get_class(self, backend, classname: str) -> type[BaseRenderer] | None:
+        cls = getattr(backend, classname, None)
+        if cls is None and self.DEBUG:
+            raise AttributeError(f"Cannot find the class {classname} in the backend  {backend}")
+        return cls
 
     def render_single(self, cls: type[BaseRenderer], *args, **kwargs):
         renderer = cls()
