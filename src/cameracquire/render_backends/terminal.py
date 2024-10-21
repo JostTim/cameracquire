@@ -17,7 +17,7 @@ from genicam.genapi import (
     # IDeviceInfo,
     # AccessException,
 )
-from harvesters.core import ImageAcquirer, NodeMap, DeviceInfo
+from harvesters.core import ImageAcquirer, NodeMap, DeviceInfo, Payload
 
 from rich.panel import Panel
 from rich.text import Text
@@ -120,7 +120,7 @@ class DeviceSelectionRenderer(Renderer):
             else "No camera appear to be accessible"
         )
 
-        Text.assemble(
+        return Text.assemble(
             (
                 f"Unable to access the camera with ID: {selection_id}.\n{other_possibilities}.\n",
                 "bright_red",
@@ -222,6 +222,9 @@ class NoDataRenderer(SingleMessageRenderer):
     message = "No data to acquire. Timeout"
     style = "bright_red"
 
+    def render(self, exception: Optional[Exception] = None):
+        self.console.print(f"{self.message}. {exception if exception is not None else ''}", style=self.style)
+
 
 class PayloadEmptyRenderer(SingleMessageRenderer):
     message = "The payload of the buffer acquired was empty."
@@ -231,6 +234,31 @@ class PayloadEmptyRenderer(SingleMessageRenderer):
 class PayloadComponentEmptyRenderer(SingleMessageRenderer):
     message = "No image data was found in the buffer's payload first component"
     style = "bright_red"
+
+
+class AcquisitionStoppedRenderer(SingleMessageRenderer):
+    message = "The acquisition stopped"
+    style = "bright_orange"
+
+
+class PayloadComponentsRenderer(Renderer):
+    style = "blue"
+
+    def render(self, payload: Payload):
+        self.console.print(f"Payload type : {type(payload)}", style=self.style)
+
+        components_types = [str(type(component)) for component in payload.components]
+        self.console.print(f"Payload components : {components_types}", style=self.style)
+
+        # node_maps = []
+        # for component in payload.components:
+        #     node_map: NodeMap | None = getattr(component, "_node_map", None)
+        #     if node_map is None:
+        #         continue
+        #     node_names = [str(node.node.display_name) for node in node_map.nodes]
+        #     node_maps.append(f"nodes: {', '.join(node_names)}")
+
+        # self.console.print(f"Payload nodemaps : {'component:'.join(node_maps)}", style=self.style)
 
 
 class ImageRecievedNotificationRenderer(Renderer):
