@@ -228,20 +228,24 @@ def simple_test():
 
                 while not timeouted:
                     try:
-                        buffer = a.fetch(timeout=1)
+                        buffer: Buffer | None = a.fetch(timeout=1)  # type: ignore
                     except TimeoutException:
                         c.print("Timeout", style="bright_red")
                         timeouted = True
                         continue
 
-                    image_data: Component2DImage = buffer.payload.components[0]  # type: ignore
-
-                    if image_data.data is None:
+                    if buffer is None:
                         continue
-                    image = np.reshape(image_data.data, (image_data.height, image_data.width))
 
-                    c.print(f"Image shape : {image.shape} at time : {buffer.timestamp}")
-                    buffer.queue()
+                    with buffer:
+                        image_data: Component2DImage = buffer.payload.components[0]  # type: ignore
+
+                        if image_data.data is None:
+                            continue
+                        image = np.reshape(image_data.data, (image_data.height, image_data.width))
+
+                        c.print(f"Image shape : {image.shape} at time : {buffer.timestamp}")
+                    # buffer.queue()
 
                 a.stop()
 
