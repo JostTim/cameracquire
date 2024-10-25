@@ -35,7 +35,7 @@ from enum import Enum
 if TYPE_CHECKING:
     from ..core import CameraDriver
 
-install_rich_tracebacks(show_locals=True)
+# install_rich_tracebacks(show_locals=True)
 
 
 class LogggingLevels(Enum):
@@ -271,11 +271,11 @@ class ImageRecievedNotificationRenderer(Renderer):
     LIVE: CrossInstanceReferencer[Live] = CrossInstanceReferencer()
 
     def render(self, image_shape):
-        self.MEMORY.add_frame_and_get_fps()
+        self.MEMORY.update(image_shape)
 
         self.live.update(
             f"Total frames received: {self.MEMORY.total_frames} ({self.MEMORY.real_fps}fps) "
-            f"at resolution: {image_shape}"
+            f"at resolution: {self.MEMORY.image_shape}"
         )
 
     @property

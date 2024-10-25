@@ -47,13 +47,18 @@
             font-weight: bold;
             color: #e94e77;
         }
+        .resizable-image {
+            width: 100%;
+            max-width: 300px; /* Set the maximum width */
+            height: auto; /* Maintain aspect ratio */
+        }
     </style>    
 
   </head>
 
   <body>
     <h1>Camera Stream</h1>
-    <img src="{{ url_for('video_feed') }}" width="640" height="480">
+    <img  class= "resizable-image" src="{{ url_for('video_feed') }}" width="640" height="480">
     <h2>Real FPS: <span id="fps-value">0</span></h2>
   </body>
 

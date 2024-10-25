@@ -1,33 +1,82 @@
 from .core import CameraDriver
 from .render_backends import register_backend
-
+import asyncio
 import argparse
 
 
 def acquire(args):
 
     if args.stream:
-        from .render_backends import web
-        from webbrowser import open_new as open_new_webbrowser
-        from threading import Timer, Thread
+        # from .render_backends import web
+        # from webbrowser import open_new as open_new_webbrowser
+        # from asyncio import get_event_loop
 
-        host = "127.0.0.1"
-        port = 5678
-        register_backend("web", web)
+        # host = "127.0.0.1"
+        # port = 5678
+        # register_backend("web", web)
 
-        def open_browser():
-            open_new_webbrowser(f"http://{host}:{port}/")
+        # def open_browser():
+        #     open_new_webbrowser(f"http://{host}:{port}/")
 
-        def run_flask_app():
-            web.app.run(host=host, port=port, debug=False)
+        # loop = get_event_loop()
+        # loop.create_task(web.run_app(host, port))
 
-        flask_thread = Thread(target=run_flask_app)
-        flask_thread.start()
+        # loop.call_later(1, open_browser)
+        # loop.call_later(1, print, "Opened the browser page")
 
-        Timer(1, open_browser).start()
+        # print(f"Started web app in {loop}")
+        try:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(run_streamed_acquisition(args))
+        except KeyboardInterrupt:
+            print("Acquisition stopped by user.")
+        finally:
+            # Cancel all running tasks
+            tasks = asyncio.all_tasks(loop)
+            for task in tasks:
+                task.cancel()
+            loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+            loop.close()
 
+    else:
+        with CameraDriver() as driver:
+            driver.acquire(args.id)
+
+
+async def run_streamed_acquisition(args):
+    # Run both the web app and camera acquisition concurrently
+    await asyncio.gather(run_web_app(), run_camera_acquisition(args.id))
+
+
+async def run_web_app():
+    from .render_backends import web
+    from webbrowser import open_new as open_new_webbrowser
+    from asyncio import get_event_loop
+
+    host = "127.0.0.1"
+    port = 5678
+    register_backend("web", web)
+
+    def open_browser():
+        open_new_webbrowser(f"http://{host}:{port}/")
+
+    loop = get_event_loop()
+    web_task = loop.create_task(web.run_app(host, port))
+
+    loop.call_later(1, open_browser)
+    loop.call_later(1, print, "Opened the browser page")
+
+    try:
+        await web_task
+    except asyncio.CancelledError:
+        print("Web app task cancelled.")
+
+
+async def run_camera_acquisition(camera_id):
+    # Run the camera acquisition in an executor to avoid blocking the event loop
+    loop = asyncio.get_event_loop()
     with CameraDriver() as driver:
-        driver.acquire(args.id)
+        await loop.run_in_executor(None, driver.acquire, camera_id)
 
 
 def list_cameras(args):

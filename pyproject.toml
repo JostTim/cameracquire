@@ -9,6 +9,7 @@ dependencies = [
     "flask>=3.0.3",
     "opencv-python>=4.10.0.84",
     "quart>=0.19.6",
+    "hypercorn>=0.17.3",
 ]
 requires-python = ">=3.9, <3.12"
 readme = "README.md"
