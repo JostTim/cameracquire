@@ -7,60 +7,233 @@
 
     <script>
         // Create a new EventSource instance to connect to the real_fps endpoint
-        const eventSource = new EventSource('/real_fps');
+        const real_fps_source = new EventSource('/real-fps');
+        const streamed_fps_source = new EventSource('/stream-fps');
+        const image_recieved_source = new EventSource('/images-recieved');
+        const image_size_source = new EventSource('/image-size');
 
-        // Listen for messages from the server
-        eventSource.onmessage = function(event) {
-            // Update the DOM with the new FPS value
-            document.getElementById('fps-value').textContent = event.data;
+        function set_target(eventsource, target_name){
+            // Listen for messages from the server
+            eventsource.onmessage = function(event) {
+                document.getElementById(target_name).textContent = event.data; // Update the DOM with the new event value
+            };
+            eventsource.onerror = function() { 
+                console.error(`Error recieving ${target_name} updates`); // Handle any errors
+            };
+            window.addEventListener('beforeunload', function() {
+                eventsource.close();
+            });
         };
 
-        // Handle any errors
-        eventSource.onerror = function() {
-            console.error('Error receiving FPS updates');
-        };
+        set_target(real_fps_source, 'real-fps');
+        set_target(streamed_fps_source, 'stream-fps');
+        set_target(image_recieved_source, 'images-recieved');
+        set_target(image_size_source, 'image-size');
+
+        function startVideoStream() {
+            const cameraImage = document.getElementById('cameraImage');
+            cameraImage.src = "{{ url_for('video_feed') }}";
+
+            cameraImage.onerror = function() {
+                console.error('Error loading stream, attempting to reconnect...');
+                setTimeout(startVideoStream, 50); // Retry connection after 50 milliseconds
+            };
+        }
+
+        document.addEventListener('DOMContentLoaded', startVideoStream);
+
     </script>
     
     <style>
         body {
+            display: flex;
+            flex-direction: column;
             font-family: Arial, sans-serif;
             background-color: #f4f4f9;
             color: #333;
             text-align: center;
             padding: 20px;
+            align-items: center;
         }
         h1 {
             color: #4a90e2;
-            margin-bottom: 20px;
-        }
-        img {
-            border: 5px solid #ddd;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
         h2 {
             font-size: 1.5em;
             color: #333;
         }
-        #fps-value {
+        .framecount{
+            font-weight: bold;
+            color: #4e5be9;
+        }
+        .fps{
             font-weight: bold;
             color: #e94e77;
         }
-        .resizable-image {
-            width: 100%;
-            max-width: 300px; /* Set the maximum width */
-            height: auto; /* Maintain aspect ratio */
+
+        .resizable {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            overflow: hidden;
+
+            border: 5px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+
+            display: flex; /* Enable Flexbox */
+            justify-content: center; /* Center horizontally */
+            align-items: center;
+
         }
+        .resizable img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .resizer{
+            border: 1px solid black;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .handle {
+            position: absolute;
+            background: transparent;
+        }
+        .handle.top, .handle.bottom {
+            height: 10px;
+            left: 0;
+            right: 0;
+            cursor: ns-resize;
+        }
+        .handle.left, .handle.right {
+            width: 10px;
+            top: 0;
+            bottom: 0;
+            cursor: ew-resize;
+        }
+        .handle.top-left, .handle.bottom-right {
+            width: 10px;
+            height: 10px;
+            cursor: nwse-resize;
+        }
+
+        ..handle.top-right, .handle.bottom-right {
+            width: 10px;
+            height: 10px;
+            cursor: nesw-resize;
+        }
+        
+        .handle.top-left {
+            top: -5px;
+            left: -5px;
+        }
+        .handle.top-right {
+            top: -5px;
+            right: -5px;
+        }
+        .handle.bottom-left {
+            bottom: -5px;
+            left: -5px;
+        }
+        .handle.bottom-right {
+            bottom: -5px;
+            right: -5px;
+        }
+        .handle.top {
+            top: -5px;
+        }
+        .handle.bottom {
+            bottom: -5px;
+        }
+        .handle.left {
+            left: -5px;
+        }
+        .handle.right {
+            right: -5px;
+        }
+        
     </style>    
 
   </head>
 
   <body>
     <h1>Camera Stream</h1>
-    <img  class= "resizable-image" src="{{ url_for('video_feed') }}" width="640" height="480">
-    <h2>Real FPS: <span id="fps-value">0</span></h2>
+    
+    <h2>Real FPS: <span id="real-fps" class="fps">0</span> 
+    Stream FPS: <span id="stream-fps" class="fps">0</span> 
+    Images Captured: <span id="images-recieved" class="framecount">0</span> 
+    Resolution: <span id="image-size" class="framecount">0</span></h2>
+
+    <div class="resizable">
+        
+            <img id="cameraImage" width="640" height="480" alt="Camera Image">
+            <div class="handle bottom"></div>
+            <div class="handle right"></div>
+            <div class="handle bottom-right"></div>
+
+    </div>
   </body>
+
+  <script>
+        let resizable, cameraImage, aspectRatio;
+        let isResizing = false;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            resizable = document.querySelector('.resizable');
+            cameraImage = document.getElementById('cameraImage');
+
+            cameraImage.addEventListener('load', function() {
+                aspectRatio = cameraImage.naturalWidth / cameraImage.naturalHeight;
+            });
+            
+            const handles = document.querySelectorAll('.handle');
+            handles.forEach(handle => {
+                handle.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    isResizing = true;
+                    window.addEventListener('mousemove', function(event) {resize(event, handle);});
+                    window.addEventListener('mouseup', stopResize);
+                });
+            });
+        });
+
+        function resize(e, handle) {
+            if (!isResizing) return;
+            const rect = resizable.getBoundingClientRect();
+            let newWidth, newHeight;
+
+            if (handle.classList.contains('right')) {
+                newWidth = e.clientX - rect.left;
+                newHeight = newWidth / aspectRatio;
+            } else if (handle.classList.contains('bottom')) {
+                newHeight = e.clientY - rect.top;
+                newWidth = newHeight * aspectRatio;
+            } else if (handle.classList.contains('left')) {
+                newWidth = rect.right - e.clientX;
+                newHeight = newWidth / aspectRatio;
+                resizable.style.left = e.clientX + 'px';
+            } else if (handle.classList.contains('top')) {
+                newHeight = rect.bottom - e.clientY;
+                newWidth = newHeight * aspectRatio;
+                resizable.style.top = e.clientY + 'px';
+            }
+
+            resizable.style.width = newWidth + 'px';
+            resizable.style.height = newHeight + 'px';
+        }
+
+        function stopResize() {
+            isResizing = false;
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResize);
+        }
+  </script>  
 
 </html>
 

@@ -13,7 +13,7 @@ from harvesters.core import (
     ParameterKey,
 )
 from genicam.gentl import AccessDeniedException, TimeoutException, DEVICE_ACCESS_FLAGS_LIST
-from genicam.genapi import ICommand, IEnumeration, IInteger, IBoolean
+from genicam.genapi import ICommand, IEnumeration, IInteger, IBoolean, IFloat
 
 from typing import List, Dict, Optional
 import sys
@@ -122,6 +122,32 @@ class CameraDriver(Harvester):
         height.set_value(512)
         width.set_value(640)
 
+    def set_high_speed(self, acquirer: ImageAcquirer):
+
+        height: IInteger = acquirer.remote_device.node_map.get_node("Height")
+        width: IInteger = acquirer.remote_device.node_map.get_node("Width")
+
+        offset_x: IInteger = acquirer.remote_device.node_map.get_node("OffsetX")
+        offset_y: IInteger = acquirer.remote_device.node_map.get_node("OffsetY")
+
+        binning: IInteger = acquirer.remote_device.node_map.get_node("BinningVertical")
+
+        exposure_mode: IEnumeration = acquirer.remote_device.node_map.get_node("ExposureMode")
+        exposure_auto: IEnumeration = acquirer.remote_device.node_map.get_node("ExposureAuto")
+        exposure_time: IFloat = acquirer.remote_device.node_map.get_node("ExposureTime")
+
+        exposure_mode.set_int_value(0)
+        exposure_auto.set_int_value(0)
+        exposure_time.set_value(11)  # in µseconds
+
+        binning.set_value(2)
+
+        height.set_value(256)
+        width.set_value(320)
+
+        offset_x.set_value(128)
+        offset_y.set_value(160)
+
     def set_low_sensibility(self, acquirer: ImageAcquirer):
 
         height: IInteger = acquirer.remote_device.node_map.get_node("Height")
@@ -156,10 +182,12 @@ class CameraDriver(Harvester):
 
         with self.create(device) as acquirer:
 
-            self.set_free_run(acquirer)
-            self.set_low_sensibility(acquirer)
+            # self.set_free_run(acquirer)
+            # self.set_low_sensibility(acquirer)
 
             self.select_user_set(acquirer, 0)
+
+            self.set_high_speed(acquirer)
 
             self.activate_chunk_mode(acquirer)
 

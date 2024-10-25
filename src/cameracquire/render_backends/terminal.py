@@ -35,7 +35,10 @@ from enum import Enum
 if TYPE_CHECKING:
     from ..core import CameraDriver
 
-# install_rich_tracebacks(show_locals=True)
+RICH_ERRORS = True
+
+if RICH_ERRORS:
+    install_rich_tracebacks(show_locals=True)
 
 
 class LogggingLevels(Enum):
