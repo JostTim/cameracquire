@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from types import ModuleType
-from typing import Optional, List, Set, Callable
+from typing import Optional, List, Set, Callable, Generic, TypeVar
+from dataclasses import dataclass
+from time import time
 
 REGISTERED_BACKENDS = {}
 DEFAULT_BACKENDS = set()
@@ -69,3 +71,39 @@ class BackendsCollection:
     def render_single(self, cls: type[BaseRenderer], *args, **kwargs):
         renderer = cls()
         renderer.render(*args, **kwargs)
+
+
+@dataclass
+class CrossInstanceCameraAttributes:
+
+    real_fps = 0.0
+    frame_times = []
+    total_frames = 0
+
+    def add_frame(self, now):
+        self.total_frames += 1
+        self.frame_times.append(now)
+
+    def add_frame_and_get_fps(self):
+        now = time()
+        self.add_frame(now)
+        self.frame_times = list(filter(lambda value: value >= now - 1, self.frame_times))
+        self.real_fps = len(self.frame_times)
+        return self.real_fps
+
+
+T = TypeVar("T")
+
+
+class CrossInstanceReferencer(dict, Generic[T]):
+
+    def __init__(self):
+        self.fetchkey = "value"
+        super().__init__()
+
+    def set(self, value: T) -> T:
+        self[self.fetchkey] = value
+        return value
+
+    def get(self) -> T | None:
+        return super().get(self.fetchkey, None)

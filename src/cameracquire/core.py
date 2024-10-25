@@ -1,8 +1,18 @@
 from pathlib import Path
 import numpy as np
 
-from harvesters.core import Harvester, DeviceInfo, ImageAcquirer, Buffer, Component2DImage, ParameterSet, PayloadImage
-from genicam.gentl import AccessDeniedException, TimeoutException
+from harvesters.core import (
+    Harvester,
+    DeviceInfo,
+    ImageAcquirer,
+    Buffer,
+    Component2DImage,
+    ParameterSet,
+    PayloadImage,
+    Device,
+    ParameterKey,
+)
+from genicam.gentl import AccessDeniedException, TimeoutException, DEVICE_ACCESS_FLAGS_LIST
 from genicam.genapi import ICommand, IEnumeration, IInteger, IBoolean
 
 from typing import List, Dict, Optional
@@ -159,31 +169,34 @@ class CameraDriver(Harvester):
 
             while active:
                 try:
-                    buffer: Buffer | None = acquirer.fetch(timeout=2, cycle_s=0.1)  # type: ignore
+                    buffer: Buffer | None = acquirer.fetch(timeout=2)  # type: ignore
                     exc = None
                 except TimeoutException as exc:
                     self.render_backends.render("NoDataRenderer", exc)
                     active = False
+                    continue
 
                 if buffer is None:
                     self.render_backends.render("NoDataRenderer")
                     continue
 
-                payload: PayloadImage = buffer.payload  # type: ignore
-                if payload is None:
-                    self.render_backends.render("PayloadEmptyRenderer")
-                    continue
+                with buffer:
 
-                self.render_backends.render("PayloadComponentsRenderer", payload)
+                    payload: PayloadImage = buffer.payload  # type: ignore
+                    if payload is None:
+                        self.render_backends.render("PayloadEmptyRenderer")
+                        continue
 
-                image_data: Component2DImage = payload.components[0]  # type: ignore
-                if image_data.data is None:
-                    self.render_backends.render("PayloadComponentEmptyRenderer")
-                    continue
+                    self.render_backends.render("PayloadComponentsRenderer", payload)
 
-                image = np.reshape(image_data.data, (image_data.height, image_data.width))
-                self.render_backends.render("ImageRecievedNotificationRenderer", image.shape)
-                # self.render_backends.render("StreamImage", image)
+                    image_data: Component2DImage = payload.components[0]  # type: ignore
+                    if image_data.data is None:
+                        self.render_backends.render("PayloadComponentEmptyRenderer")
+                        continue
+
+                    image = np.reshape(image_data.data, (image_data.height, image_data.width))
+                    self.render_backends.render("ImageRecievedNotificationRenderer", image.shape)
+                    self.render_backends.render("StreamImage", image)
 
         self.render_backends.render("AcquisitionStoppedRenderer")
 
@@ -266,3 +279,6 @@ def simple_test():
 
 # By calling buffer.queue(), you ensure that the buffer is returned to the pool, preventing buffer exhaustion and
 # maintaining a smooth acquisition workflow.
+
+
+# class Camera(ImageAcquirer):

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Camera Stream</title>
+
+    <script>
+        // Create a new EventSource instance to connect to the real_fps endpoint
+        const eventSource = new EventSource('/real_fps');
+
+        // Listen for messages from the server
+        eventSource.onmessage = function(event) {
+            // Update the DOM with the new FPS value
+            document.getElementById('fps-value').textContent = event.data;
+        };
+
+        // Handle any errors
+        eventSource.onerror = function() {
+            console.error('Error receiving FPS updates');
+        };
+    </script>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            color: #4a90e2;
+            margin-bottom: 20px;
+        }
+        img {
+            border: 5px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 1.5em;
+            color: #333;
+        }
+        #fps-value {
+            font-weight: bold;
+            color: #e94e77;
+        }
+    </style>    
+
+  </head>
+
+  <body>
+    <h1>Camera Stream</h1>
+    <img src="{{ url_for('video_feed') }}" width="640" height="480">
+    <h2>Real FPS: <span id="fps-value">0</span></h2>
+  </body>
+
+</html>
+

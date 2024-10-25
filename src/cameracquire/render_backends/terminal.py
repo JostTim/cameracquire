@@ -24,16 +24,29 @@ from rich.text import Text
 from rich.console import Group, Console
 from rich.padding import Padding
 from rich.traceback import install as install_rich_tracebacks
+from rich.live import Live
 
 from pathlib import Path
 from typing import Sequence, List, Dict, Any, Callable, Optional, TYPE_CHECKING
 
-from . import BaseRenderer
+from . import BaseRenderer, CrossInstanceCameraAttributes, CrossInstanceReferencer
+from enum import Enum
 
 if TYPE_CHECKING:
     from ..core import CameraDriver
 
 install_rich_tracebacks(show_locals=True)
+
+
+class LogggingLevels(Enum):
+
+    DEBUG = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+
+
+LOGGING_LEVEL = LogggingLevels.INFO.value
 
 
 class Renderer(BaseRenderer):
@@ -245,26 +258,32 @@ class PayloadComponentsRenderer(Renderer):
     style = "blue"
 
     def render(self, payload: Payload):
-        self.console.print(f"Payload type : {type(payload)}", style=self.style)
+        if LOGGING_LEVEL <= LogggingLevels.DEBUG.value:
+            self.console.print(f"Payload type : {type(payload)}", style=self.style)
 
-        components_types = [str(type(component)) for component in payload.components]
-        self.console.print(f"Payload components : {components_types}", style=self.style)
-
-        # node_maps = []
-        # for component in payload.components:
-        #     node_map: NodeMap | None = getattr(component, "_node_map", None)
-        #     if node_map is None:
-        #         continue
-        #     node_names = [str(node.node.display_name) for node in node_map.nodes]
-        #     node_maps.append(f"nodes: {', '.join(node_names)}")
-
-        # self.console.print(f"Payload nodemaps : {'component:'.join(node_maps)}", style=self.style)
+            components_types = [str(type(component)) for component in payload.components]
+            self.console.print(f"Payload components : {components_types}", style=self.style)
 
 
 class ImageRecievedNotificationRenderer(Renderer):
 
+    MEMORY = CrossInstanceCameraAttributes()
+    LIVE: CrossInstanceReferencer[Live] = CrossInstanceReferencer()
+
     def render(self, image_shape):
-        self.console.print(f"Recieved an image of size : {image_shape}.")
+        self.MEMORY.add_frame_and_get_fps()
+
+        self.live.update(
+            f"Total frames received: {self.MEMORY.total_frames} ({self.MEMORY.real_fps}fps) "
+            f"at resolution: {image_shape}"
+        )
+
+    @property
+    def live(self) -> Live:
+        live = self.LIVE.get()
+        if live is None:
+            live = self.LIVE.set(Live(console=self.console, refresh_per_second=4).__enter__())
+        return live
 
 
 class NodeRenderer(Renderer):
